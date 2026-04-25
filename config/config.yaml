@@ -1,0 +1,87 @@
+# ============================================================
+# PDF RAG – Default Configuration
+# ============================================================
+# Environment variable overrides follow the pattern:
+#   PDF_RAG__<SECTION>__<KEY>=value
+# Example: PDF_RAG__LLM__BACKEND=openai
+
+# ----------------------------------------------------------
+# Embedding model
+# ----------------------------------------------------------
+embedding:
+  # backend: "databricks" | "openai" | "huggingface"
+  backend: huggingface
+  # Defaults per backend:
+  #   huggingface -> sentence-transformers/all-MiniLM-L6-v2
+  #   databricks  -> databricks-bge-large-en
+  #   openai      -> text-embedding-3-small
+  model_name: sentence-transformers/all-MiniLM-L6-v2
+
+# ----------------------------------------------------------
+# LLM
+# ----------------------------------------------------------
+llm:
+  # backend: "databricks" | "openai" | "huggingface"
+  backend: databricks
+  # Defaults per backend:
+  #   databricks  -> databricks-dbrx-instruct
+  #   openai      -> gpt-4o-mini
+  #   huggingface -> HuggingFaceH4/zephyr-7b-beta
+  model_name: databricks-dbrx-instruct
+  temperature: 0.0
+  max_tokens: 1024
+
+# ----------------------------------------------------------
+# Text chunking
+# ----------------------------------------------------------
+chunking:
+  chunk_size: 1000
+  chunk_overlap: 200
+
+# ----------------------------------------------------------
+# Retrieval
+# ----------------------------------------------------------
+retrieval:
+  # Number of candidates from dense vector search
+  dense_k: 10
+  # Number of candidates from BM25 sparse search
+  bm25_k: 10
+  # Final number of documents fed to the LLM after re-ranking
+  final_k: 5
+  # Cross-encoder re-ranker model (null to disable)
+  # e.g. "cross-encoder/ms-marco-MiniLM-L-6-v2"
+  reranker_model: null
+
+# ----------------------------------------------------------
+# Vector store
+# ----------------------------------------------------------
+vector_store:
+  # "local" or "databricks"
+  type: local
+  # Local backend: "faiss" | "chroma"
+  local_backend: faiss
+  # Directory for persisting the local index (null = in-memory only)
+  persist_directory: null
+
+  # Databricks Vector Search settings (only used when type=databricks)
+  databricks:
+    catalog: main
+    schema: pdf_rag
+    table_name: document_chunks
+    vector_search_endpoint: pdf_rag_endpoint
+    embedding_dimension: 1024  # databricks-bge-large-en = 1024, text-embedding-3-small = 1536
+    pipeline_type: TRIGGERED   # TRIGGERED | CONTINUOUS
+
+# ----------------------------------------------------------
+# MLflow
+# ----------------------------------------------------------
+mlflow:
+  enabled: true
+  # experiment_name: /Users/<your_email>/pdf_rag_experiment
+  experiment_name: pdf_rag
+
+# ----------------------------------------------------------
+# Logging
+# ----------------------------------------------------------
+logging:
+  level: INFO

@@ -1,0 +1,68 @@
+# ============================================================
+# PDF RAG – Databricks Configuration
+# ============================================================
+# Copy this file and fill in your workspace details.
+# Never commit secrets – use environment variables or Databricks secrets.
+#
+# Required environment variables:
+#   DATABRICKS_HOST  – e.g. https://adb-123456789.azuredatabricks.net
+#   DATABRICKS_TOKEN – your PAT (or use instance profile on clusters)
+
+# ----------------------------------------------------------
+# Embedding model
+# ----------------------------------------------------------
+embedding:
+  backend: databricks
+  model_name: databricks-bge-large-en
+
+# ----------------------------------------------------------
+# LLM
+# ----------------------------------------------------------
+llm:
+  backend: databricks
+  model_name: databricks-dbrx-instruct
+  temperature: 0.0
+  max_tokens: 1024
+
+# ----------------------------------------------------------
+# Text chunking
+# ----------------------------------------------------------
+chunking:
+  chunk_size: 1000
+  chunk_overlap: 200
+
+# ----------------------------------------------------------
+# Retrieval
+# ----------------------------------------------------------
+retrieval:
+  dense_k: 10
+  bm25_k: 10
+  final_k: 5
+  reranker_model: null
+
+# ----------------------------------------------------------
+# Vector store
+# ----------------------------------------------------------
+vector_store:
+  type: databricks
+  databricks:
+    # Update these to match your Unity Catalog setup
+    catalog: main
+    schema: pdf_rag
+    table_name: document_chunks
+    vector_search_endpoint: pdf_rag_endpoint
+    embedding_dimension: 1024   # databricks-bge-large-en = 1024 dims
+    pipeline_type: TRIGGERED
+
+# ----------------------------------------------------------
+# MLflow
+# ----------------------------------------------------------
+mlflow:
+  enabled: true
+  experiment_name: /Users/your_email@example.com/pdf_rag_experiment
+
+# ----------------------------------------------------------
+# Logging
+# ----------------------------------------------------------
+logging:
+  level: INFO
