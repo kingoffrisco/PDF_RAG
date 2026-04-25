@@ -13,7 +13,7 @@
 # MAGIC match your environment.
 
 # COMMAND ----------
-# MAGIC %md ## 0. Parameters (edit these)
+# MAGIC %md ## 0. Parameters
 
 # COMMAND ----------
 
@@ -30,6 +30,10 @@ CHUNK_OVERLAP = 200
 
 EMBEDDING_BACKEND = "databricks"
 EMBEDDING_MODEL   = "databricks-bge-large-en"
+
+# Path to the cloned PDF_RAG repository inside Databricks Repos.
+# e.g. "/Workspace/Repos/your_email@example.com/PDF_RAG"
+REPO_PATH = "/Workspace/Repos/your_email@example.com/PDF_RAG"
 # ─────────────────────────────────────────────────────────────────────────────
 
 FULL_TABLE    = f"{CATALOG}.{SCHEMA}.{TABLE_NAME}"
@@ -41,7 +45,7 @@ INDEX_NAME    = f"{FULL_TABLE}_index"
 # COMMAND ----------
 
 import sys
-sys.path.insert(0, "/Workspace/Repos/<your_repo>/PDF_RAG/src")
+sys.path.insert(0, f"{REPO_PATH}/src")
 
 from pdf_rag.ingestion.pdf_loader import load_pdf, load_pdfs_from_directory
 from pdf_rag.ingestion.text_chunker import chunk_documents

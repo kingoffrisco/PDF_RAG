@@ -33,6 +33,10 @@ EMBEDDING_BACKEND = "databricks"
 EMBEDDING_MODEL   = "databricks-bge-large-en"
 LLM_BACKEND       = "databricks"
 LLM_MODEL         = "databricks-dbrx-instruct"
+
+# Path to the cloned PDF_RAG repository inside Databricks Repos.
+# e.g. "/Workspace/Repos/your_email@example.com/PDF_RAG"
+REPO_PATH = "/Workspace/Repos/your_email@example.com/PDF_RAG"
 # ─────────────────────────────────────────────────────────────────────────────
 
 FULL_TABLE = f"{CATALOG}.{SCHEMA}.{TABLE_NAME}"
@@ -63,7 +67,7 @@ eval_dataset = [
 # COMMAND ----------
 
 import sys
-sys.path.insert(0, "/Workspace/Repos/<your_repo>/PDF_RAG/src")
+sys.path.insert(0, f"{REPO_PATH}/src")
 
 from databricks.vector_search.client import VectorSearchClient
 from langchain_databricks.vectorstores import DatabricksVectorSearch

@@ -28,6 +28,10 @@ MAX_TOKENS   = 1024
 
 RETRIEVAL_K     = 5    # final docs fed to the LLM
 DENSE_K         = 10   # candidates from vector search
+
+# Path to the cloned PDF_RAG repository inside Databricks Repos.
+# e.g. "/Workspace/Repos/your_email@example.com/PDF_RAG"
+REPO_PATH = "/Workspace/Repos/your_email@example.com/PDF_RAG"
 # ─────────────────────────────────────────────────────────────────────────────
 
 FULL_TABLE = f"{CATALOG}.{SCHEMA}.{TABLE_NAME}"
@@ -39,7 +43,7 @@ INDEX_NAME = f"{FULL_TABLE}_index"
 # COMMAND ----------
 
 import sys
-sys.path.insert(0, "/Workspace/Repos/<your_repo>/PDF_RAG/src")
+sys.path.insert(0, f"{REPO_PATH}/src")
 
 from databricks.vector_search.client import VectorSearchClient
 from langchain_databricks.vectorstores import DatabricksVectorSearch

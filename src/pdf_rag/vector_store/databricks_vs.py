@@ -66,7 +66,7 @@ class DatabricksVectorStore:
         table_name: str,
         vector_search_endpoint: str,
         index_name: Optional[str] = None,
-        embedding_dimension: int = 1536,
+        embedding_dimension: int = 1024,
         host: Optional[str] = None,
         token: Optional[str] = None,
     ) -> None:

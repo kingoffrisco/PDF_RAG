@@ -69,7 +69,7 @@ vector_store:
     schema: pdf_rag
     table_name: document_chunks
     vector_search_endpoint: pdf_rag_endpoint
-    embedding_dimension: 1536
+    embedding_dimension: 1024  # databricks-bge-large-en = 1024, text-embedding-3-small = 1536
     pipeline_type: TRIGGERED   # TRIGGERED | CONTINUOUS
 
 # ----------------------------------------------------------
