@@ -16,11 +16,12 @@
 5. [Databricks Deployment](#databricks-deployment)
 6. [Configuration Reference](#configuration-reference)
 7. [LLM & Embedding Backends](#llm--embedding-backends)
-8. [Notebooks](#notebooks)
-9. [Running Tests](#running-tests)
-10. [Evaluation](#evaluation)
-11. [Enterprise Considerations](#enterprise-considerations)
-12. [Contributing](#contributing)
+8. [Hybrid Reranking](#hybrid-reranking)
+9. [Notebooks](#notebooks)
+10. [Running Tests](#running-tests)
+11. [Evaluation](#evaluation)
+12. [Enterprise Considerations](#enterprise-considerations)
+13. [Contributing](#contributing)
 
 ---
 
@@ -78,13 +79,10 @@ PDF_RAG/
 │   ├── config.yaml              # Default (local/HuggingFace) settings
 │   └── databricks_config.yaml  # Databricks cluster settings
 ├── notebooks/
-│   ├── 01_setup_and_config.py  # Install deps, create UC schema & VS endpoint
-│   ├── 02_pdf_ingestion.py     # Load PDFs → Delta table → Vector index
-│   ├── 03_rag_query_interface.py  # Interactive Q&A
-│   └── 04_evaluation.py        # RAGAS metrics + MLflow logging
+│   └── PDF - RAG - Retrieval Augmented Generation.py  # All-in-one Databricks notebook
 ├── src/pdf_rag/
 │   ├── ingestion/
-│   │   ├── pdf_loader.py       # PDF → LangChain Documents (local/DBFS/Volume)
+│   │   ├── pdf_loader.py       # PDF → LangChain Documents (local/S3/DBFS/Volume)
 │   │   └── text_chunker.py     # Recursive character splitting + metadata
 │   ├── embeddings/
 │   │   └── embedder.py         # Databricks / OpenAI / HuggingFace factory
@@ -101,7 +99,7 @@ PDF_RAG/
 │   └── utils/
 │       ├── config.py           # YAML config + env-var overrides
 │       └── logger.py           # Structured logging
-├── tests/                      # pytest test suite (53 tests)
+├── tests/                      # pytest test suite
 ├── pyproject.toml
 └── requirements.txt
 ```
@@ -166,35 +164,49 @@ In your Databricks workspace:
 Repos → Add Repo → https://github.com/kingoffrisco/PDF_RAG.git
 ```
 
-### Step 2 – Run the setup notebook
+### Step 2 – Open the notebook
 
-Open **`notebooks/01_setup_and_config.py`** and edit the variables at the top:
+Open **`notebooks/PDF - RAG - Retrieval Augmented Generation.py`**.
+
+### Step 3 – Configure (Sections 2 & 6)
+
+Edit the variables at the top of the configuration cells:
 
 ```python
-CATALOG        = "main"
-SCHEMA         = "pdf_rag"
-VS_ENDPOINT    = "pdf_rag_endpoint"
-PDF_SOURCE_DIR = "dbfs:/mnt/raw_pdfs"
+CATALOG        = "main"            # Unity Catalog catalog
+SCHEMA         = "pdf_rag"         # Schema (created if missing)
+TABLE_NAME     = "document_chunks" # Delta table for chunk storage
+VS_ENDPOINT    = "pdf_rag_endpoint"# Vector Search endpoint name
+PDF_SOURCE_DIR = "s3://your-bucket/your-pdfs/"  # S3, Volume, or local path
+REPO_PATH      = "/Workspace/Repos/your_email@example.com/PDF_RAG"
 ```
 
-Run all cells. This creates the Unity Catalog schema and the Vector Search endpoint.
+PDF sources supported:
+- **S3**: `s3://your-bucket/path/` (files are staged to a Unity Catalog Volume automatically)
+- **Unity Catalog Volume**: `/Volumes/catalog/schema/volume/`
+- **Local/DBFS path** (non-serverless only)
 
-### Step 3 – Ingest your PDFs
+### Step 4 – Run sections 1–10 (Ingestion)
 
-Run **`notebooks/02_pdf_ingestion.py`**.  
-The notebook:
-1. Loads PDFs from `PDF_SOURCE_DIR`.
-2. Chunks, embeds, and writes them to a Delta table.
-3. Creates (or refreshes) the Vector Search index.
+Run cells in order through **Section 10** to:
+1. Install dependencies.
+2. Create the Unity Catalog schema and Vector Search endpoint.
+3. Set the MLflow experiment.
+4. Load and chunk your PDFs.
+5. Generate embeddings and write chunks to a Delta table.
+6. Create (or refresh) the Vector Search index.
 
-### Step 4 – Ask questions
+### Step 5 – Run sections 11–15 (Q&A)
 
-Run **`notebooks/03_rag_query_interface.py`** with your questions.
+Run through **Section 15** to build the hybrid reranking retriever and RAG chain, then ask questions interactively or in batch.
 
-### Step 5 – Evaluate quality (optional)
+### Step 6 – Run sections 16–20 (Evaluation, optional)
 
-Run **`notebooks/04_evaluation.py`** with your ground-truth Q&A pairs to get
-RAGAS faithfulness / relevancy / precision / recall scores, logged to MLflow.
+Run through **Section 20** to compute RAGAS metrics and log results to MLflow.
+
+### Step 7 – Deploy Gradio app (optional, Section 21)
+
+Follow the deployment instructions in **Section 21** to launch a Gradio chat interface as a Databricks App or locally in the notebook.
 
 ### Switching backends with one config change
 
@@ -247,19 +259,53 @@ Override any value with an environment variable:
 | Backend | Embedding model | LLM | API key required | Cost |
 |---------|----------------|-----|-----------------|------|
 | `huggingface` | `all-MiniLM-L6-v2` (local) | `zephyr-7b-beta` (local) | No | Free |
-| `databricks` | `databricks-bge-large-en` | `databricks-dbrx-instruct` | Databricks PAT | Free on DBX Community / pay-as-you-go |
+| `databricks` | `databricks-bge-large-en` | `databricks-meta-llama-3-3-70b-instruct` | Databricks PAT | Free on DBX Community / pay-as-you-go |
 | `openai` | `text-embedding-3-small` | `gpt-4o-mini` | `OPENAI_API_KEY` | Paid |
+
+---
+
+## Hybrid Reranking
+
+The notebook implements a two-stage retrieval strategy that improves answer quality:
+
+1. **Dense retrieval** — Databricks Vector Search returns the top 15 candidate chunks.
+2. **Cross-encoder reranking** — `cross-encoder/ms-marco-MiniLM-L-6-v2` scores each (query, chunk) pair and reranks them.
+3. **Adaptive fallback** — Reranking is applied when the top cross-encoder score exceeds 0.3 or score variance is high; otherwise the original vector search order is kept.
+
+The top 10 chunks from the reranker are passed to the LLM.
 
 ---
 
 ## Notebooks
 
-| Notebook | Purpose |
-|----------|---------|
-| `01_setup_and_config.py` | One-time cluster setup: install libs, create UC schema & VS endpoint |
-| `02_pdf_ingestion.py` | Ingest PDFs → Delta table → Vector Search index |
-| `03_rag_query_interface.py` | Interactive Q&A with source citations |
-| `04_evaluation.py` | RAGAS metrics evaluation + MLflow logging |
+The repository contains a single all-in-one Databricks notebook:
+
+**`notebooks/PDF - RAG - Retrieval Augmented Generation.py`**
+
+| Section | Purpose |
+|---------|---------|
+| 1 – Install dependencies | `%pip install` all required packages and restart Python |
+| 2 – Configuration | Set catalog, schema, endpoint, PDF source, LLM/embedding backend |
+| 3 – Unity Catalog schema | Create catalog and schema if missing |
+| 4 – Verify Vector Search endpoint | Create or confirm VS endpoint existence |
+| 5 – Set MLflow experiment | Configure experiment path for run tracking |
+| 6 – Parameters (ingestion) | Chunk size, overlap, S3/Volume source path, repo path |
+| 7 – Load & chunk PDFs | Load from S3, Volume, or local path; split into chunks |
+| 8 – Generate embeddings | Embed chunks with `databricks-bge-large-en` |
+| 9 – Write to Delta table | Persist chunks + vectors to Unity Catalog Delta table |
+| 10 – Create / refresh Vector Search index | Build or sync the Vector Search index |
+| 11 – Parameters (Q&A) | LLM model, retrieval k, repo path |
+| 12 – Build retriever | Connect to Databricks Vector Search |
+| 13 – Hybrid reranking retriever | Cross-encoder reranking layer (15 → 10 chunks) |
+| 14 – Build RAG chain | Assemble LLM + reranked retriever + MLflow logging |
+| 15 – Interactive Q&A | Single question with source citations |
+| 16 – Batch questions | Loop over multiple questions |
+| 17 – Parameters (evaluation) | Evaluation LLM and embedding config |
+| 18 – Define evaluation questions | 10 domain-specific Q&A pairs |
+| 19 – Run RAG chain on eval set | Generate answers for all eval questions |
+| 20 – Compute RAGAS metrics | Faithfulness, relevancy, precision, recall |
+| 21 – Log to MLflow | Persist metric scores and raw results |
+| 22 – Deploy Gradio app | Launch a chat UI as a Databricks App or in-notebook |
 
 ---
 
