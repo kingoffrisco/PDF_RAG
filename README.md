@@ -1,38 +1,64 @@
-# PDF RAG – Enterprise Retrieval-Augmented Generation for PDF Documents on Databricks
+# Energy Plan PDF RAG – Question Answering System on Databricks
 
-> **An end-to-end, production-ready RAG pipeline** that ingests PDF documents,
-> stores embeddings in Databricks Vector Search (or local FAISS/Chroma), and
-> answers natural-language questions with full source citations.
-> Designed for the Databricks free-tier _and_ for commercial enterprise deployment.
+> **A production-ready RAG system** for asking natural language questions about electricity plans and energy documents. Built with Databricks Vector Search, Foundation Model APIs, and LangChain. Features both an interactive Streamlit app and notebook interface.
 
 ---
 
 ## Table of Contents
 
 1. [Overview](#overview)
-2. [Architecture](#architecture)
-3. [Repository Structure](#repository-structure)
-4. [Quick Start – Local Development](#quick-start--local-development)
-5. [Databricks Deployment](#databricks-deployment)
-6. [Configuration Reference](#configuration-reference)
-7. [LLM & Embedding Backends](#llm--embedding-backends)
-8. [Notebooks](#notebooks)
-9. [Running Tests](#running-tests)
-10. [Evaluation](#evaluation)
-11. [Enterprise Considerations](#enterprise-considerations)
-12. [Contributing](#contributing)
+2. [System Status](#system-status)
+3. [Architecture](#architecture)
+4. [Quick Start](#quick-start)
+5. [Repository Structure](#repository-structure)
+6. [Deployment Options](#deployment-options)
+7. [Configuration](#configuration)
+8. [How It Works](#how-it-works)
+9. [Development](#development)
 
 ---
 
 ## Overview
 
-PDF RAG solves three problems:
+This system solves the problem of quickly finding information across a large collection of PDF documents about electricity plans, energy rates, and solar buyback programs.
 
-| Problem | Solution |
-|---------|---------|
-| How do I ask questions about a large collection of PDFs? | Ingest them into a vector store; retrieve the most relevant passages at query time. |
-| How do I run this for free on Databricks? | HuggingFace embeddings + local FAISS on a single-node cluster, or Databricks Community Edition. |
-| How do I scale this commercially? | Switch to Databricks Vector Search + Foundation Model APIs with one config-file change. |
+**What it does:**
+* Ingests PDF documents and extracts text
+* Chunks documents and generates embeddings
+* Stores embeddings in Databricks Vector Search for fast retrieval
+* Answers natural language questions with source citations
+* Provides both web interface (Streamlit) and notebook interface
+
+**Sample questions:**
+* "What types of energy plans are available?"
+* "How do solar buyback programs work?"
+* "What are common fees in electricity plans?"
+* "Are there plans with no monthly charge?"
+
+---
+
+## System Status
+
+### ✅ Working Infrastructure
+
+| Component | Status | Details |
+|-----------|--------|---------|
+| **Data Table** | ✅ Live | `main.pdf_rag.document_chunks` |
+| **Vector Search Index** | ✅ Online | `main.pdf_rag.document_chunks_index` |
+| **Vector Search Endpoint** | ✅ Active | `pdf_rag_endpoint` |
+| **Embedding Model** | ✅ Active | `databricks-bge-large-en` (1024-dim) |
+| **LLM Model** | ✅ Active | `databricks-meta-llama-3-3-70b-instruct` |
+| **Streamlit App** | ⚠️ Deployed* | `pdf-rag-chat` |
+| **Notebook Interface** | ✅ Working | `Energy_Plan_QA_Interactive.py` |
+
+\* **Streamlit App Note:** The app is deployed and running successfully, but requires workspace admins to enable "On-Behalf-Of User Authorization" in workspace security settings for user authentication. [See deployment details](#databricks-app-streamlit).
+
+### Current Deployment
+
+* **App Name:** `pdf-rag-chat`
+* **App URL:** `https://pdf-rag-chat-2479810620852778.aws.databricksapps.com`
+* **Working Notebook:** [Energy_Plan_QA_Interactive](#notebook-1963340446073469)
+* **Workspace:** `https://dbc-60fb4a1c-8bce.cloud.databricks.com`
 
 ---
 
@@ -42,31 +68,60 @@ PDF RAG solves three problems:
 ┌──────────────────────────────────────────────────────────────────┐
 │                        INGESTION PIPELINE                        │
 │                                                                  │
-│  PDF Files         Text         Chunks      Embeddings  Vector   │
-│  (DBFS /  ──────► Extraction ──► Chunking ──► Model   ──► Store  │
-│   Volume)         pdfplumber    LangChain   (HF / DB   (FAISS /  │
-│                                  Splitter    / OpenAI)  DB VS)   │
+│  PDF Files         Text         Chunks      Embeddings  Delta    │
+│  (Volume)  ──────► Extraction ──► Chunking ──► Model   ──► Table │
+│                    pdfplumber    LangChain   databricks-  main.  │
+│                                  Splitter    bge-large   pdf_rag │
+│                                              -en         .doc... │
+│                                                     │             │
+│                                                     ▼             │
+│                                            Vector Search Index    │
 └──────────────────────────────────────────────────────────────────┘
 
 ┌──────────────────────────────────────────────────────────────────┐
 │                         QUERY PIPELINE                           │
 │                                                                  │
-│  Question ──► Embeddings ──► Dense Search ──┐                   │
-│                              (Vector Store) │                    │
-│                                             ├──► Hybrid Merge   │
-│             BM25 (optional) ───────────────┘   + Re-rank        │
-│                                                      │           │
-│                                              Top-K Chunks        │
+│  Question ──► Embeddings ──► Vector Search ──► Top-K Chunks     │
+│               (bge-large)    (Similarity)            │           │
 │                                                      │           │
 │                                          ┌───────────▼────────┐ │
-│                                          │   LLM (DBRX /      │ │
-│                                          │   GPT-4o / HF)     │ │
+│                                          │   LLM (Llama 3.3   │ │
+│                                          │   70B Instruct)    │ │
 │                                          └───────────┬────────┘ │
 │                                                      │           │
 │                                           Answer + Citations     │
-│                                           (MLflow logged)        │
+│                                           (with page numbers)    │
 └──────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## Quick Start
+
+### Option 1: Interactive Notebook (Recommended - No Setup Needed)
+
+The notebook interface is already working and ready to use:
+
+1. Open [Energy_Plan_QA_Interactive](#notebook-1963340446073469)
+2. Run all cells (packages install automatically)
+3. Ask questions in the final cell:
+
+```python
+my_question = "How do solar buyback programs work?"
+ask_question(my_question)
+```
+
+### Option 2: Streamlit Web App (Requires Admin Setup)
+
+The Streamlit app is deployed but requires a one-time workspace setting:
+
+1. **Admin must enable On-Behalf-Of authorization:**
+   * Admin Console → Security → On-Behalf-Of
+   * Enable "On-Behalf-Of User Authorization"
+
+2. **Access the app:**
+   * URL: https://pdf-rag-chat-2479810620852778.aws.databricksapps.com
+   * Works immediately after authorization is enabled (no redeployment needed)
 
 ---
 
@@ -74,246 +129,366 @@ PDF RAG solves three problems:
 
 ```
 PDF_RAG/
+├── app.py                          # Streamlit web application
+├── app.yaml                        # Streamlit server configuration
+├── databricks.yml                  # Databricks Apps deployment config
+├── requirements.txt                # Python dependencies for app
+├── DEPLOYMENT.md                   # Deployment troubleshooting guide
+├── README.md                       # This file
 ├── config/
-│   ├── config.yaml              # Default (local/HuggingFace) settings
-│   └── databricks_config.yaml  # Databricks cluster settings
+│   ├── config.yaml                 # Default RAG settings
+│   └── databricks_config.yaml     # Databricks-specific settings
 ├── notebooks/
-│   ├── 01_setup_and_config.py  # Install deps, create UC schema & VS endpoint
-│   ├── 02_pdf_ingestion.py     # Load PDFs → Delta table → Vector index
-│   ├── 03_rag_query_interface.py  # Interactive Q&A
-│   └── 04_evaluation.py        # RAGAS metrics + MLflow logging
-├── src/pdf_rag/
+│   ├── Energy_Plan_QA_Interactive.py  # 🟢 Working notebook interface
+│   ├── 01_setup_and_config.py     # Initial setup (already run)
+│   ├── 02_pdf_ingestion.py        # PDF ingestion (already run)
+│   └── 03_rag_query_interface.py  # Original query notebook
+├── src/pdf_rag/                   # Core RAG package
 │   ├── ingestion/
-│   │   ├── pdf_loader.py       # PDF → LangChain Documents (local/DBFS/Volume)
-│   │   └── text_chunker.py     # Recursive character splitting + metadata
+│   │   ├── pdf_loader.py          # PDF loading utilities
+│   │   └── text_chunker.py        # Text chunking
 │   ├── embeddings/
-│   │   └── embedder.py         # Databricks / OpenAI / HuggingFace factory
+│   │   └── embedder.py            # Embeddings factory (Databricks/OpenAI/HF)
 │   ├── vector_store/
-│   │   ├── databricks_vs.py    # Databricks Vector Search wrapper
-│   │   └── local_vs.py         # FAISS / Chroma for local dev
+│   │   ├── databricks_vs.py       # Databricks Vector Search wrapper
+│   │   └── local_vs.py            # FAISS/Chroma for local dev
 │   ├── retrieval/
-│   │   └── retriever.py        # Hybrid BM25 + dense + optional re-ranker
+│   │   └── retriever.py           # Hybrid retrieval + reranking
 │   ├── generation/
-│   │   └── llm_chain.py        # RAG chain, prompt, LLM factory
+│   │   └── llm_chain.py           # RAG chain + LLM factory
 │   ├── pipeline/
-│   │   ├── ingestion_pipeline.py  # Orchestrates ingestion end-to-end
-│   │   └── rag_pipeline.py        # Orchestrates query end-to-end
+│   │   ├── ingestion_pipeline.py  # End-to-end ingestion
+│   │   └── rag_pipeline.py        # End-to-end query
 │   └── utils/
-│       ├── config.py           # YAML config + env-var overrides
-│       └── logger.py           # Structured logging
-├── tests/                      # pytest test suite (53 tests)
-├── pyproject.toml
-└── requirements.txt
+│       ├── config.py              # Config management
+│       └── logger.py              # Structured logging
+└── tests/                         # pytest test suite
+    ├── test_embedder.py
+    ├── test_retriever.py
+    └── ...
 ```
 
 ---
 
-## Quick Start – Local Development
+## Deployment Options
 
-### Prerequisites
+### Notebook Interface (✅ Currently Working)
 
-* Python 3.10+
+**File:** `Energy_Plan_QA_Interactive.py`
 
-### Install
+**Features:**
+* Uses your personal credentials (no app authentication needed)
+* Same RAG functionality as the Streamlit app
+* Cell-by-cell execution for debugging
+* Instant feedback and results
 
-```bash
-git clone https://github.com/kingoffrisco/PDF_RAG.git
-cd PDF_RAG
-
-# Core + local dev extras (FAISS + HuggingFace embeddings, no API keys needed)
-pip install -e ".[local,dev]"
+**Usage:**
+```python
+# After running initialization cells:
+my_question = "What types of energy plans are available?"
+ask_question(my_question)
 ```
 
-### Ingest PDFs
+**Output includes:**
+* Full answer from LLM
+* Source citations with file names and page numbers
+* Retrieval diagnostics
+
+---
+
+### Databricks App (Streamlit)
+
+**Status:** ⚠️ Deployed but blocked by authentication
+
+**App Details:**
+* **Name:** `pdf-rag-chat`
+* **URL:** https://pdf-rag-chat-2479810620852778.aws.databricksapps.com
+* **Compute:** Medium (2 vCPUs, 6 GB)
+* **Deployment Status:** `RUNNING` ✅
+* **Authentication:** Requires On-Behalf-Of authorization ⚠️
+
+**Required One-Time Setup (Admin Only):**
+
+The app is fully deployed and running, but Databricks Apps require a workspace security setting for user authentication:
+
+1. **Admin Access Required:**
+   * Click your profile icon (top right)
+   * Select "Admin Console" (only visible to workspace admins)
+
+2. **Enable On-Behalf-Of Authorization:**
+   * Navigate to: **Security** → **On-Behalf-Of**
+   * Toggle **"On-Behalf-Of User Authorization"** to **ON**
+   * Save changes
+
+3. **Test the App:**
+   * Wait 30 seconds
+   * Access the app URL (no redeployment needed)
+   * App will authenticate users automatically
+
+**If you're not a workspace admin:**
+* Contact your admin with this request:
+  > "Please enable 'On-Behalf-Of User Authorization' in Admin Console → Security → On-Behalf-Of. This is required for the PDF RAG Databricks App to authenticate users."
+
+**App Resources (All Configured ✅):**
+* SQL Warehouse
+* Embeddings Endpoint (`databricks-bge-large-en`)
+* LLM Endpoint (`databricks-meta-llama-3-3-70b-instruct`)
+* Vector Search Index (`main.pdf_rag.document_chunks_index`)
+* UC Table (`main.pdf_rag.document_chunks`)
+* UC Volume (`main.pdf_rag.temp_pdfs_3cfabbfa`)
+
+**Service Principal Permissions (All Granted ✅):**
+* CAN_QUERY on both model endpoints
+* SELECT on document_chunks table
+* READ on vector search index
+* WRITE_VOLUME on temp_pdfs volume
+
+---
+
+## Configuration
+
+### Current Settings
+
+The system is currently configured for production use on Databricks:
+
+| Setting | Value | Description |
+|---------|-------|-------------|
+| **Catalog** | `main` | Unity Catalog catalog |
+| **Schema** | `pdf_rag` | Schema for tables and indexes |
+| **Table** | `document_chunks` | Delta table with PDF chunks |
+| **Vector Search Endpoint** | `pdf_rag_endpoint` | VS endpoint name |
+| **Embedding Model** | `databricks-bge-large-en` | 1024-dimensional embeddings |
+| **LLM Model** | `databricks-meta-llama-3-3-70b-instruct` | Chat-optimized LLM |
+| **Temperature** | `0.0` | Deterministic responses |
+| **Max Tokens** | `1024` | Maximum response length |
+| **Retrieval K** | `10` | Number of chunks to retrieve |
+| **Chunk Size** | `1000` | Characters per chunk |
+| **Chunk Overlap** | `200` | Overlap between chunks |
+
+### Modifying Configuration
+
+**For notebook interface:**
+Edit values directly in cell 4 of `Energy_Plan_QA_Interactive.py`:
 
 ```python
-from pdf_rag.pipeline.ingestion_pipeline import IngestionPipeline
-
-# Uses config/config.yaml by default:
-#   embedding.backend = huggingface
-#   vector_store.local_backend = faiss
-pipeline = IngestionPipeline.from_config()
-chunks = pipeline.run("/path/to/your/pdfs/")
-print(f"Indexed {len(chunks)} chunks.")
+CATALOG = "main"
+SCHEMA = "pdf_rag"
+EMBEDDING_MODEL = "databricks-bge-large-en"
+LLM_MODEL = "databricks-meta-llama-3-3-70b-instruct"
 ```
 
-### Query
+**For Streamlit app:**
+Edit values in `app.py` and redeploy:
 
 ```python
-from pdf_rag.pipeline.rag_pipeline import RAGPipeline
+CATALOG = "main"
+SCHEMA = "pdf_rag"
+EMBEDDING_MODEL = "databricks-bge-large-en"
+LLM_MODEL = "databricks-meta-llama-3-3-70b-instruct"
+```
 
-# Point at a persisted FAISS index
-rag = RAGPipeline.from_ingestion_pipeline(pipeline, corpus_documents=chunks)
+**For general settings:**
+Edit `config/databricks_config.yaml`:
 
-answer = rag.query("What are the key findings in the report?")
-print(answer)
+```yaml
+embedding:
+  backend: databricks
+  model_name: databricks-bge-large-en
 
-# With source documents
-result = rag.query_with_sources("What risks are identified?")
+llm:
+  backend: databricks
+  model_name: databricks-meta-llama-3-3-70b-instruct
+  temperature: 0.0
+  max_tokens: 1024
+```
+
+---
+
+## How It Works
+
+### VectorSearchRetriever
+
+Custom LangChain retriever that queries Databricks Vector Search:
+
+```python
+class VectorSearchRetriever(BaseRetriever):
+    """Retrieves relevant document chunks from Databricks Vector Search."""
+    
+    vsc_client: VectorSearchClient
+    index: VectorSearchIndex
+    embeddings: Embeddings
+    k: int = 10  # Number of results to return
+    text_column: str = "content"
+    columns: List[str] = ["chunk_id", "content", "source", "file_name", "page_number"]
+    
+    def _get_relevant_documents(self, query: str) -> List[Document]:
+        # 1. Embed the query
+        query_vector = self.embeddings.embed_query(query)
+        
+        # 2. Search vector index
+        response = self.index.similarity_search(
+            query_vector=query_vector,
+            columns=self.columns,
+            num_results=self.k
+        )
+        
+        # 3. Convert to LangChain Documents
+        documents = []
+        for row in response['result']['data_array']:
+            col_map = {col: row[i] for i, col in enumerate(self.columns)}
+            content = col_map.get(self.text_column, "")
+            metadata = {k: v for k, v in col_map.items() if k != self.text_column}
+            documents.append(Document(page_content=content, metadata=metadata))
+        
+        return documents
+```
+
+### RAG Chain
+
+The system uses LangChain to orchestrate retrieval and generation:
+
+```python
+# 1. Initialize components
+embeddings = get_embeddings(backend="databricks", model_name="databricks-bge-large-en")
+vsc = VectorSearchClient(workspace_url=host, personal_access_token=token)
+vs_index = vsc.get_index(endpoint_name="pdf_rag_endpoint", index_name="main.pdf_rag.document_chunks_index")
+
+# 2. Create retriever
+retriever = VectorSearchRetriever(
+    vsc_client=vsc,
+    index=vs_index,
+    embeddings=embeddings,
+    k=10
+)
+
+# 3. Create LLM
+llm = get_llm(backend="databricks", model_name="databricks-meta-llama-3-3-70b-instruct")
+
+# 4. Create RAG chain
+rag_chain = RAGChain(llm=llm, retriever=retriever)
+
+# 5. Query
+result = rag_chain.query_with_sources("How do solar buyback programs work?")
 print(result["answer"])
 for doc in result["sources"]:
     print(f"  → {doc.metadata['file_name']}, page {doc.metadata['page_number']}")
 ```
 
----
+### Data Flow
 
-## Databricks Deployment
-
-### Step 1 – Clone the repo into Databricks Repos
-
-In your Databricks workspace:
-```
-Repos → Add Repo → https://github.com/kingoffrisco/PDF_RAG.git
-```
-
-### Step 2 – Run the setup notebook
-
-Open **`notebooks/01_setup_and_config.py`** and edit the variables at the top:
-
-```python
-CATALOG        = "main"
-SCHEMA         = "pdf_rag"
-VS_ENDPOINT    = "pdf_rag_endpoint"
-PDF_SOURCE_DIR = "dbfs:/mnt/raw_pdfs"
-```
-
-Run all cells. This creates the Unity Catalog schema and the Vector Search endpoint.
-
-### Step 3 – Ingest your PDFs
-
-Run **`notebooks/02_pdf_ingestion.py`**.  
-The notebook:
-1. Loads PDFs from `PDF_SOURCE_DIR`.
-2. Chunks, embeds, and writes them to a Delta table.
-3. Creates (or refreshes) the Vector Search index.
-
-### Step 4 – Ask questions
-
-Run **`notebooks/03_rag_query_interface.py`** with your questions.
-
-### Step 5 – Evaluate quality (optional)
-
-Run **`notebooks/04_evaluation.py`** with your ground-truth Q&A pairs to get
-RAGAS faithfulness / relevancy / precision / recall scores, logged to MLflow.
-
-### Switching backends with one config change
-
-| Scenario | `config/config.yaml` change |
-|----------|---------------------------|
-| Local dev (free) | `embedding.backend: huggingface`, `llm.backend: huggingface` |
-| Databricks free tier | `embedding.backend: databricks`, `llm.backend: databricks` |
-| OpenAI | `embedding.backend: openai`, `llm.backend: openai` |
-
-Or use environment variables (no config file edits needed):
-```bash
-export PDF_RAG__LLM__BACKEND=openai
-export PDF_RAG__EMBEDDING__BACKEND=openai
-export OPENAI_API_KEY=sk-...
-```
+1. **User asks a question** → "What are common fees in electricity plans?"
+2. **Embeddings model** converts question to 1024-dim vector
+3. **Vector Search** finds 10 most similar document chunks
+4. **LLM** receives question + retrieved chunks as context
+5. **LLM generates** answer grounded in retrieved content
+6. **System returns** answer + source citations (file names, page numbers)
 
 ---
 
-## Configuration Reference
+## Development
 
-All settings live in `config/config.yaml`.  
-Override any value with an environment variable:  
-`PDF_RAG__<SECTION>__<KEY>=value`
-
-| Section | Key | Default | Description |
-|---------|-----|---------|-------------|
-| `embedding` | `backend` | `huggingface` | `databricks` \| `openai` \| `huggingface` |
-| `embedding` | `model_name` | `sentence-transformers/all-MiniLM-L6-v2` | Model / endpoint name |
-| `llm` | `backend` | `databricks` | `databricks` \| `openai` \| `huggingface` |
-| `llm` | `model_name` | `databricks-dbrx-instruct` | Model / endpoint name |
-| `llm` | `temperature` | `0.0` | Sampling temperature |
-| `llm` | `max_tokens` | `1024` | Max response tokens |
-| `chunking` | `chunk_size` | `1000` | Characters per chunk |
-| `chunking` | `chunk_overlap` | `200` | Overlap between chunks |
-| `retrieval` | `dense_k` | `10` | Dense search candidates |
-| `retrieval` | `bm25_k` | `10` | BM25 candidates |
-| `retrieval` | `final_k` | `5` | Docs fed to LLM |
-| `retrieval` | `reranker_model` | `null` | Cross-encoder model (optional) |
-| `vector_store` | `type` | `local` | `local` \| `databricks` |
-| `vector_store` | `local_backend` | `faiss` | `faiss` \| `chroma` |
-| `vector_store.databricks` | `catalog` | `main` | UC catalog |
-| `vector_store.databricks` | `schema` | `pdf_rag` | UC schema |
-| `vector_store.databricks` | `vector_search_endpoint` | `pdf_rag_endpoint` | VS endpoint name |
-| `mlflow` | `enabled` | `true` | Enable LangChain autologging |
-
----
-
-## LLM & Embedding Backends
-
-| Backend | Embedding model | LLM | API key required | Cost |
-|---------|----------------|-----|-----------------|------|
-| `huggingface` | `all-MiniLM-L6-v2` (local) | `zephyr-7b-beta` (local) | No | Free |
-| `databricks` | `databricks-bge-large-en` | `databricks-dbrx-instruct` | Databricks PAT | Free on DBX Community / pay-as-you-go |
-| `openai` | `text-embedding-3-small` | `gpt-4o-mini` | `OPENAI_API_KEY` | Paid |
-
----
-
-## Notebooks
-
-| Notebook | Purpose |
-|----------|---------|
-| `01_setup_and_config.py` | One-time cluster setup: install libs, create UC schema & VS endpoint |
-| `02_pdf_ingestion.py` | Ingest PDFs → Delta table → Vector Search index |
-| `03_rag_query_interface.py` | Interactive Q&A with source citations |
-| `04_evaluation.py` | RAGAS metrics evaluation + MLflow logging |
-
----
-
-## Running Tests
+### Running Tests
 
 ```bash
 # Install dev dependencies
-pip install -e ".[local,dev]"
-pip install pdfplumber reportlab rank-bm25
+pip install -e ".[dev]"
 
-# Run the full test suite
+# Run test suite
 pytest tests/ -v
 
 # With coverage
-pytest tests/ -v --cov=src/pdf_rag --cov-report=term-missing
+pytest tests/ --cov=src/pdf_rag --cov-report=term-missing
 ```
 
+### Adding New Documents
+
+To add more PDFs to the system:
+
+1. Upload PDFs to a Unity Catalog volume or DBFS location
+2. Run the ingestion pipeline (see `notebooks/02_pdf_ingestion.py`)
+3. The vector index updates automatically
+4. New content is immediately available for queries
+
+### Local Development
+
+For local development without Databricks infrastructure:
+
+```bash
+# Install with local extras (FAISS + HuggingFace)
+pip install -e ".[local,dev]"
+
+# Configure for local mode
+export PDF_RAG__EMBEDDING__BACKEND=huggingface
+export PDF_RAG__LLM__BACKEND=huggingface
+export PDF_RAG__VECTOR_STORE__TYPE=local
+export PDF_RAG__VECTOR_STORE__LOCAL_BACKEND=faiss
+```
+
+### Project Structure Notes
+
+* **`src/pdf_rag/`** - Core reusable package for ingestion, retrieval, and generation
+* **`app.py`** - Streamlit interface (web deployment)
+* **`Energy_Plan_QA_Interactive.py`** - Notebook interface (current working version)
+* **`notebooks/`** - Setup, ingestion, and development notebooks
+* **`config/`** - YAML configuration files
+* **`tests/`** - pytest test suite
+
 ---
 
-## Evaluation
+## Troubleshooting
 
-Quality is measured with [RAGAS](https://github.com/explodinggradients/ragas):
+### "Login error" on Streamlit App
 
-| Metric | Target | Description |
-|--------|--------|-------------|
-| `faithfulness` | > 0.85 | Answer grounded in retrieved context |
-| `answer_relevancy` | > 0.80 | Answer relevant to question |
-| `context_precision` | > 0.75 | Retrieved chunks are precise |
-| `context_recall` | > 0.75 | Retrieved chunks are complete |
+**Symptom:** App shows "Login error - Sorry, there was an error while trying to authenticate to app"
 
-All evaluation runs are tracked in MLflow for trend analysis.
+**Cause:** On-Behalf-Of User Authorization is not enabled in workspace settings
+
+**Solution:**
+1. Contact workspace admin
+2. Ask them to enable: Admin Console → Security → On-Behalf-Of → "On-Behalf-Of User Authorization"
+3. Wait 30 seconds, then access app URL (no redeployment needed)
+
+### Notebook Import Errors
+
+**Symptom:** `ModuleNotFoundError: No module named 'pdf_rag'`
+
+**Solution:**
+```python
+# Add src to Python path
+import sys
+sys.path.insert(0, '/Workspace/Users/kingoffrisco@yahoo.com/PDF_RAG/src')
+```
+
+### Vector Search Index Not Found
+
+**Symptom:** `IndexNotFoundException` or `404 Not Found`
+
+**Solution:**
+* Verify index exists: `main.pdf_rag.document_chunks_index`
+* Check endpoint is ONLINE: `pdf_rag_endpoint`
+* Confirm you have READ permission on the index
+
+### Slow Query Performance
+
+**Cause:** LLM inference + vector search typically takes 3-5 seconds
+
+**Optimization options:**
+* Reduce `k` (number of retrieved chunks) from 10 to 5
+* Reduce `MAX_TOKENS` from 1024 to 512
+* Use a smaller/faster LLM model (trade-off: lower quality)
 
 ---
 
-## Enterprise Considerations
+## Next Steps
 
-| Concern | How it's addressed |
-|---------|-------------------|
-| **Data governance** | PDFs and chunks stored in Unity Catalog with column-level permissions |
-| **Security** | No secrets in code; all credentials via env vars or Databricks Secrets |
-| **Scalability** | Databricks Vector Search scales horizontally; Delta table handles millions of chunks |
-| **Reproducibility** | All experiments tracked in MLflow; model serving via MLflow endpoints |
-| **Observability** | Structured logging + MLflow LangChain autologging on every query |
-| **Cost control** | Free-tier: HuggingFace models, no API calls; Commercial: Foundation Model APIs |
-| **Extensibility** | Swap any component (embedder / LLM / vector store) with one config change |
-
----
-
-## Contributing
-
-1. Fork the repository and create a feature branch.
-2. Make your changes with tests.
-3. Run `pytest tests/` – all tests must pass.
-4. Open a pull request.
+* **✅ Complete:** Infrastructure, data ingestion, notebook interface
+* **⚠️ Pending:** Streamlit app authentication (admin action required)
+* **Future enhancements:**
+  * Add reranking with CrossEncoder for better retrieval
+  * Implement chat history for multi-turn conversations
+  * Add evaluation metrics (RAGAS) for answer quality
+  * Enable MLflow logging for query analytics
+  * Add user feedback collection
 
 ---
 

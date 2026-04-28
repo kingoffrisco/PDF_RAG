@@ -1,0 +1,41 @@
+bundle:
+  name: pdf-rag-chat
+resources:
+  apps:
+    pdf-rag-chat:
+      name: pdf-rag-chat
+      description: PDF RAG Chat Application with Streamlit
+      command:
+      - streamlit
+      - run
+      - app.py
+      - --server.port=8080
+      - --server.address=0.0.0.0
+      - --server.headless=true
+      - --browser.serverAddress=localhost
+      resources:
+      - name: sql-warehouse
+        sql_warehouse:
+          id: ${var.warehouse_id}
+      - name: serving-endpoint
+        serving_endpoint:
+          name: databricks-bge-large-en
+      - name: llm-endpoint
+        serving_endpoint:
+          name: databricks-meta-llama-3-3-70b-instruct
+          permission: CAN_QUERY
+      - name: uc-volume
+        volume:
+          catalog_name: main
+          schema_name: pdf_rag
+          name: temp_pdfs_3cfal
+      - name: vector-search-index
+        vector_search_index:
+          index_name: main.pdf_rag.document_chunks_index
+      - name: uc-table
+        sql_table:
+          full_name: main.pdf_rag.document_chunks
+variables:
+  warehouse_id:
+    default: ef56d2eedab1b4fa
+    description: SQL Warehouse ID for the app

@@ -1,44 +1,7 @@
-# ============================================================
-# PDF RAG – Python dependencies
-# ============================================================
-# Core (always required)
-pyyaml>=6.0
-langchain>=0.3.0
-langchain-core>=0.3.0
-langchain-text-splitters>=0.3.0
-langchain-community>=0.3.0
-pdfplumber>=0.11.0
-
-# Local vector store (development / CI)
-faiss-cpu>=1.8.0
-langchain-community>=0.3.0  # FAISS wrapper lives here
-
-# Chroma (optional local alternative to FAISS)
-# langchain-chroma>=0.1.0
-# chromadb>=0.5.0
-
-# HuggingFace embeddings (free tier / local dev)
-langchain-huggingface>=0.1.0
-sentence-transformers>=3.0.0
-
-# Databricks (commercial / cluster)
-# databricks-vectorsearch>=0.40
-# langchain-databricks>=0.3.0
-
-# OpenAI (optional paid backend)
-# langchain-openai>=0.2.0
-# openai>=1.0.0
-
-# BM25 sparse retrieval
-rank-bm25>=0.2.2
-
-# MLflow tracking & model registry
-mlflow>=2.14.0
-
-# Evaluation (RAGAS)
-# ragas>=0.1.0
-# datasets>=2.20.0
-
-# Testing
-pytest>=8.0.0
-pytest-cov>=5.0.0
+streamlit==1.32.0
+sentence-transformers>=2.2.0
+langchain>=0.1.0
+langchain-core>=0.1.0
+langchain-databricks>=0.1.0
+databricks-vectorsearch>=0.22
+numpy>=1.24.0
